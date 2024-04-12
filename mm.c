@@ -69,12 +69,91 @@ team_t team = {
 /* 다음과 이전 블록 포인터를 각각 리턴한다. 다음 또는 이전 헤더의 위치이기도함*/
 #define NEXT_BLKP(bp)   (((char *)(bp) + GET_SIZE((char *)(bp) - WSIZE))) // 다음 block pointer 위치로 이동
 #define PREV_BLKP(bp)   (((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))) // 이전 block pointer 위치로 이동
-/* 
+/*
  * mm_init - initialize the malloc package.
  */
+static char *heap_listp;
+
+/* private variables */
+static char *mem_start_brk;  /* points to first byte of heap */
+static char *mem_brk;        /* points to last byte of heap */
+static char *mem_max_addr;   /* largest legal heap address */
+static void *extend_heap(size_t words);
+static void *coalesce(void *bp);
+
 int mm_init(void)
 {
+    // mem_sbrk: 힙 영역을 incr(0이 아닌 양수) bytes 만큼 확장하고, 새로 할당된 힙 영역의 첫번째 byte를 가리키는 제네릭 포인터를 리턴함
+    /* 비어있는 heap을 만든다.*/
+    // (void *)-1의 경우 에러 상황을 나타내는 전통적인 방법 중 하나 , -1이 return되는 케이스
+    if((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
+        return -1;
+
+    PUT(heap_listp, 0); // alignment padding
+    PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); // prologue header
+    PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); // prologue footer
+    PUT(heap_listp + (3*WSIZE), PACK(0, 1)); // epliogue header
+    heap_listp += (2 * WSIZE); // 포인터를 Prologue Header 뒤로 이동
+
+    // 두 가지 다른 경우에 호출된다.
+    // (1) 힙이 초기화 될때 (2) mm_malloc이 적당한 맞춤fit을 찾지 못했을 때
+    if (extend_heap(CHUNKSIZE / WSIZE) == NULL)  // extend_heap을 통해 시작할 때 힙을 한번 늘려줌
+        return -1;
+
     return 0;
+
+}
+
+static void *extend_heap(size_t words)
+{
+    // 요청한 크기를 인접 2워드의 배수(8바이트)로 반올림하여, 그 후에 추가적인 힙 공간 요청
+    char *bp;
+    size_t size;
+    // 요청한 크기를 2워드의 배수로 반올림하고 추가 힙 공간을 요청함
+    size = (words %2) ? (words+1)*WSIZE : words * WSIZE;
+    if((long)(bp = mem_sbrk(size)) == -1)
+        return NULL;
+
+
+    PUT(HDRP(bp), PACK(size, 0));
+    PUT(FTRP(bp), PACK(size, 0));
+    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
+
+    /*coalesce(bp)*/;
+    return coalesce(bp);
+};
+
+static void *coalesce(void *bp)
+{
+    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+    size_t size = GET_SIZE(HDRP(bp));
+
+    if (prev_alloc && next_alloc){              // Case 1 : 이전 ,현재 블록이 모두 할당된 상태
+        return bp;                              // // 할당이 해제되는 경우밖에 없으므로 이미 현재블록은 가용하므로 리턴
+    }
+    else if(prev_alloc && !next_alloc){         // Case 2 : 이전 블록은 할당상태, 다음블록은 가용상태
+        size += GET_SIZE(HDRP(NEXT_BLKP(bp)));  // 현재 블록에 다음블록 포함
+        PUT(HDRP(bp), PACK(size, 0));           // 헤더 푸터 셋팅
+        PUT(FTRP(bp), PACK(size, 0));
+    }
+    else if(!prev_alloc && next_alloc){         // Case 3 : 이전 블록은 가용, 다음 블록 할당상
+        size += GET_SIZE(HDRP(PREV_BLKP(bp)));  // 현재 블록을 이전 블록까지 포함한 상태로 변경
+        PUT(FTRP(bp), PACK(size, 0));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size,0));
+        bp = PREV_BLKP(bp);// 이전 블록의 헤더 이동
+    }
+    else{                                       // Case 4 : 이전 블록과 다음 블록 병합 즉, 모두 가용상태
+        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+        bp = PREV_BLKP(bp);
+
+        //bp = PREV_BLKP(bp);             동일하게 동작함
+        //PUT(HDRP((bp)), PACK(size, 0));
+        //PUT(FTRP(bp), PACK(size, 0));
+    }
+    return bp;
 }
 
 /* 
