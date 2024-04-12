@@ -44,6 +44,31 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
+/* 가용 리스트 단위를 조작하기 위한 상수 값과 매크로 설정*/
+#define WSIZE 4  // word size
+#define DSIZE 8 // double word size
+#define CHUNKSIZE (1<<12) // 초기 가용 블록 & 힙 확장을 위한 기본 Chunk size (4kb = 2**12)
+
+#define MAX(x,y) ((x) > (y) ? (x): (y))
+
+/* 헤더와 푸터에 저장할 수 있는 값 리턴*/
+#define PACK(size, alloc) ((size) | (alloc)) // size 와 alloc을 합쳐서 block address 제작
+
+/* 크기와 할당 비트를 통합해서 헤더와 푸터에 저장할 수 있는 값을 리턴*/
+#define GET(p)      (*(unsigned int *)(p)) // 인자 p에 들어있는 block address 획득
+#define PUT(p, val) (*(unsigned int *)(p) = (val))  // 인자 p에 다음 block address 할당
+
+/* 주소 p의 헤더 또는 푸터의 SIZE와 할당 비트를 리턴한다.*/
+#define GET_SIZE(p)   (GET(p) & ~0x7) // 뒤에 3비트를 제외하고 읽어옴, address에 있는 size 획득 (& 11111000)
+#define GET_ALLOC(p)  (GET(p) & 0x1) // 할당 가용 확인 , // address에 있는 alloc 획득 (& 00000001)
+
+/* 각각 블록 헤더와 풋터를 가리키는 포인터를 리턴한다.*/
+#define HDRP(bp)    ((char *)(bp) - WSIZE) // Header는 block pointer의 Word Size만큼 앞에 위치
+#define FTRP(bp)    ((char *)(bp) + GET_SIZE(HDRP(bp))- DSIZE) // Footer는 헤더의 끝 지점부터 block의 사이즈 만큼 더하고 2*word만큼 앞에 위치
+
+/* 다음과 이전 블록 포인터를 각각 리턴한다. 다음 또는 이전 헤더의 위치이기도함*/
+#define NEXT_BLKP(bp)   (((char *)(bp) + GET_SIZE((char *)(bp) - WSIZE))) // 다음 block pointer 위치로 이동
+#define PREV_BLKP(bp)   (((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))) // 이전 block pointer 위치로 이동
 /* 
  * mm_init - initialize the malloc package.
  */
