@@ -155,6 +155,27 @@ static void *coalesce(void *bp)
     }
     return bp;
 }
+/*
+ * 가용 블록의 Address를 찾는 함수
+ *
+ */
+
+
+static void *find_fit(size_t asize){
+    // 적절한 가용 블록을 검색한다.
+    //first fit 검색을 수행한다. -> 리스트 처음부터 탐색하여 가용블록 찾기
+    // 무조건 사용만 가능하면되기에 탐색은 빠르지만, 최적의 메모리 사용은 아닐 확률이 있다.
+    // next fit, best fit,good fit은 별도 구현
+    void *bp;
+    //헤더의 사이즈가 0보다 크다. -> 에필로그까지 탐색한다.
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) >0; bp = NEXT_BLKP(bp)){
+        if(!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))){
+            return bp;
+        }
+    }
+    return NULL;
+}
+
 
 /* 
  * mm_malloc - Allocate a block by incrementing the brk pointer.
