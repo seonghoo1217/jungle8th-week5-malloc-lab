@@ -176,21 +176,83 @@ static void *find_fit(size_t asize){
     return NULL;
 }
 
+/*
+ * void bp*: bp 가용 블록의 주소
+ * size_t asize: 가용블록에 할당하는 size
+ */
+// 블록의 포인터(bp)와 할당하려는 크기(asize)를 인자로 받아, 실제 메모리 할당 과정을 수행하는 함수
+// 요청한 블록을 가용 블록의 시작 부분에 배치, 나머지 부분의 크기가 최소 블록크기와 같거나 큰 경우에만 분할하는 함수.
+static void place(void *bp, size_t asize){
+    size_t csize = GET_SIZE(HDRP(bp));
 
-/* 
+    if((csize - asize) >= (2*DSIZE)){
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+        bp = NEXT_BLKP(bp); // 다음 블록(분할한)으로 포인터 이동
+        PUT(HDRP(bp), PACK(csize- asize, 0));// 새로 분할된 블록의 헤더,푸터를 남은 크기와 미할당 상태로 설정
+        PUT(FTRP(bp), PACK(csize- asize, 0));
+    }else{
+        PUT(HDRP(bp), PACK(csize, 1));
+        PUT(FTRP(bp),PACK(csize, 1));
+    }
+}
+
+/*
  * mm_malloc - Allocate a block by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
  */
+
+//size만큼 메모리를 할당함
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
+    /*int newsize = ALIGN(size + SIZE_T_SIZE);
     void *p = mem_sbrk(newsize);
     if (p == (void *)-1)
         return NULL;
     else {
         *(size_t *)p = size;
         return (void *)((char *)p + SIZE_T_SIZE);
+    }*/
+    size_t asize;
+    size_t extendsize;
+    char *bp;
+
+    if (size == 0){
+        return NULL;
     }
+
+    // size를 바탕으로 헤더와 푸터의 공간 확보
+    // 8바이트는 정렬조건을 만족하기 위해
+    // 추가 8바이트는 헤더와 푸터 오버헤드를 위해서 확보
+    if (size<=DSIZE){
+        /*
+         * 만약 요청된 메모리의 크기(size)가 DSIZE보다 작거나 같다면, 할당할 메모리의 크기(asize)는 2*DSIZE로 설정됩니다.
+         * 여기서 DSIZE는 '더블 워드 크기'를 의미하며, 시스템의 최소 메모리 할당 단위
+         */
+        asize = 2*DSIZE;
+    }else{
+        /*
+         * 요청된 크기가 DSIZE의 배수가 되도록 합니다.
+         * 이를 위해 (size + (DSIZE) + (DSIZE - 1))를 계산한 후, 이를 DSIZE로 나누어 올림 처리합니다.
+         * 여기서 (DSIZE - 1)을 더하는 것은 올림을 구현하기 위한 것입니다.
+         * 예를 들어, size가 DSIZE의 배수가 아닌 경우, 나눗셈의 결과가 정수가 아니게 됩니다. 이때 (DSIZE - 1)을 더하면, DSIZE로 나누었을 때 올림이 발생하게 됩니다.
+         */
+        asize = DSIZE*((size+(DSIZE) + (DSIZE-1)) / DSIZE);
+    }
+
+    //first_fit으로 NULL이 아닌 메모리 공간을 찾으면 할당
+    if ((bp = find_fit(asize)) != NULL) {
+        place(bp, asize);
+        return bp;
+    }
+
+    extendsize = MAX(asize, CHUNKSIZE);
+
+    if ((bp = extend_heap(extendsize / WSIZE)) == NULL)
+        return NULL;
+
+    place(bp, asize);
+    return bp;
 }
 
 /*
@@ -198,6 +260,12 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *ptr)
 {
+    size_t size = GET_SIZE(HDRP(ptr));
+
+    // 헤더와 푸터를 0으로 할당하고 coalesce를 호출하여 가용 메모리를 이어준다.
+    PUT(HDRP(ptr), PACK(size, 0));
+    PUT(FTRP(ptr), PACK(size, 0));
+    coalesce(ptr);
 }
 
 /*
