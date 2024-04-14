@@ -101,7 +101,6 @@ int mm_init(void) {
         return -1;
 
     return 0;
-
 }
 
 static void *extend_heap(size_t words) {
@@ -196,6 +195,32 @@ static void *best_fit(size_t asize) {
     // 가장 잘 맞는 블록 반환 (없으면 NULL)
     return best_fit;
 }
+
+static char *last_bp = NULL;
+
+static void *next_fit(size_t asize) {
+    // last_bp가 NULL이면, 처음부터 탐색을 시작합니다.
+    if (last_bp == NULL) {
+        last_bp = heap_listp;
+    }
+    char *bp = last_bp;
+
+    do {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            // 적절한 크기의 블록을 찾으면 last_bp를 업데이트하고 반환합니다.
+            last_bp = bp;
+            return bp;
+        }
+        bp = NEXT_BLKP(bp);
+        // 리스트의 끝에 도달하면 처음부터 다시 시작합니다.
+        if (GET_SIZE(HDRP(bp)) == 0) {
+            bp = heap_listp;
+        }
+        // last_bp에 도달할 때까지 또는 적절한 블록을 찾을 때까지 반복합니다.
+    } while (bp != last_bp);
+
+    return NULL;
+}
 /*
  * void bp*: bp 가용 블록의 주소
  * size_t asize: 가용블록에 할당하는 size
@@ -260,7 +285,7 @@ void *mm_malloc(size_t size) {
     }
 
     //first_fit으로 NULL이 아닌 메모리 공간을 찾으면 할당
-    if ((bp = best_fit(asize)) != NULL) {
+    if ((bp = next_fit(asize)) != NULL) {
         place(bp, asize);
         return bp;
     }
