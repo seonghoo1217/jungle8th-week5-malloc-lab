@@ -73,6 +73,8 @@ team_t team = {
  * mm_init - initialize the malloc package.
  */
 static char *heap_listp;
+static char *recent_alloc = NULL;
+
 
 /* private variables */
 static char *mem_start_brk;  /* points to first byte of heap */
@@ -127,7 +129,7 @@ static void *coalesce(void *bp) {
     size_t size = GET_SIZE(HDRP(bp));
 
     if (prev_alloc && next_alloc) {              // Case 1 : 이전 ,현재 블록이 모두 할당된 상태
-        heap_listp = bp;
+        recent_alloc = bp;
         return bp;                              // // 할당이 해제되는 경우밖에 없으므로 이미 현재블록은 가용하므로 리턴
     } else if (prev_alloc && !next_alloc) {         // Case 2 : 이전 블록은 할당상태, 다음블록은 가용상태
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));  // 현재 블록에 다음블록 포함
@@ -148,7 +150,7 @@ static void *coalesce(void *bp) {
         //PUT(HDRP((bp)), PACK(size, 0));
         //PUT(FTRP(bp), PACK(size, 0));
     }
-    heap_listp = bp;
+    recent_alloc = bp;
     return bp;
 }
 
@@ -165,11 +167,26 @@ static void *find_fit(size_t asize) {
     // next fit, best fit,good fit은 별도 구현
     void *bp;
     //헤더의 사이즈가 0보다 크다. -> 에필로그까지 탐색한다.
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+    if (recent_alloc == NULL) {
+        recent_alloc = heap_listp;
+    }
+
+
+    for (bp = recent_alloc; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
         if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            recent_alloc = bp;
             return bp;
         }
     }
+
+    // 저장된 위치부터 보고 나서 할당할 곳을 못찾았다면, 처음부터 재탐색 한번 더함
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            recent_alloc = bp;
+            return bp;
+        }
+    }
+
     return NULL;
 }
 
