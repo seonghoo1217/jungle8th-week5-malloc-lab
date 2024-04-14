@@ -101,7 +101,6 @@ int mm_init(void) {
         return -1;
 
     return 0;
-
 }
 
 static void *extend_heap(size_t words) {
@@ -128,6 +127,7 @@ static void *coalesce(void *bp) {
     size_t size = GET_SIZE(HDRP(bp));
 
     if (prev_alloc && next_alloc) {              // Case 1 : 이전 ,현재 블록이 모두 할당된 상태
+        heap_listp = bp;
         return bp;                              // // 할당이 해제되는 경우밖에 없으므로 이미 현재블록은 가용하므로 리턴
     } else if (prev_alloc && !next_alloc) {         // Case 2 : 이전 블록은 할당상태, 다음블록은 가용상태
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));  // 현재 블록에 다음블록 포함
@@ -148,6 +148,7 @@ static void *coalesce(void *bp) {
         //PUT(HDRP((bp)), PACK(size, 0));
         //PUT(FTRP(bp), PACK(size, 0));
     }
+    heap_listp = bp;
     return bp;
 }
 
@@ -172,6 +173,56 @@ static void *find_fit(size_t asize) {
     return NULL;
 }
 
+static void *best_fit(size_t asize) {
+    void *best_fit = NULL; // 가장 잘 맞는 블록을 저장할 포인터
+    size_t smallest_diff = (size_t) - 1; // 가장 작은 크기 차이; 초기값은 최대값으로 설정
+
+    void *bp;
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        size_t csize = GET_SIZE(HDRP(bp));
+
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= csize)) {
+            size_t diff = csize - asize; // 현재 블록과 요청 크기의 차이 계산
+
+            // 차이가 0이면, 완벽하게 맞는 블록을 찾은 것이므로 바로 반환
+            if (diff == 0) {
+                return bp;
+            } else if (diff < smallest_diff) { // 더 작은 차이를 가진 블록을 찾으면 업데이트
+                best_fit = bp;
+                smallest_diff = diff;
+            }
+        }
+    }
+
+    // 가장 잘 맞는 블록 반환 (없으면 NULL)
+    return best_fit;
+}
+
+//static char *last_bp = NULL;
+
+/*static void *next_fit(size_t asize) {
+    // last_bp가 NULL이면, 처음부터 탐색을 시작합니다.
+    if (last_bp == NULL) {
+        last_bp = heap_listp;
+    }
+    char *bp = last_bp;
+
+    do {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            // 적절한 크기의 블록을 찾으면 last_bp를 업데이트하고 반환합니다.
+            last_bp = bp;
+            return bp;
+        }
+        bp = NEXT_BLKP(bp);
+        // 리스트의 끝에 도달하면 처음부터 다시 시작합니다.
+        if (GET_SIZE(HDRP(bp)) == 0) {
+            bp = heap_listp;
+        }
+        // last_bp에 도달할 때까지 또는 적절한 블록을 찾을 때까지 반복합니다.
+    } while (bp != last_bp);
+
+    return NULL;
+}*/
 /*
  * void bp*: bp 가용 블록의 주소
  * size_t asize: 가용블록에 할당하는 size
