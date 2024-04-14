@@ -172,6 +172,30 @@ static void *find_fit(size_t asize) {
     return NULL;
 }
 
+static void *best_fit(size_t asize) {
+    void *best_fit = NULL; // 가장 잘 맞는 블록을 저장할 포인터
+    size_t smallest_diff = (size_t) - 1; // 가장 작은 크기 차이; 초기값은 최대값으로 설정
+
+    void *bp;
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        size_t csize = GET_SIZE(HDRP(bp));
+
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= csize)) {
+            size_t diff = csize - asize; // 현재 블록과 요청 크기의 차이 계산
+
+            // 차이가 0이면, 완벽하게 맞는 블록을 찾은 것이므로 바로 반환
+            if (diff == 0) {
+                return bp;
+            } else if (diff < smallest_diff) { // 더 작은 차이를 가진 블록을 찾으면 업데이트
+                best_fit = bp;
+                smallest_diff = diff;
+            }
+        }
+    }
+
+    // 가장 잘 맞는 블록 반환 (없으면 NULL)
+    return best_fit;
+}
 /*
  * void bp*: bp 가용 블록의 주소
  * size_t asize: 가용블록에 할당하는 size
@@ -236,7 +260,7 @@ void *mm_malloc(size_t size) {
     }
 
     //first_fit으로 NULL이 아닌 메모리 공간을 찾으면 할당
-    if ((bp = find_fit(asize)) != NULL) {
+    if ((bp = best_fit(asize)) != NULL) {
         place(bp, asize);
         return bp;
     }
