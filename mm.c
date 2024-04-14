@@ -127,6 +127,7 @@ static void *coalesce(void *bp) {
     size_t size = GET_SIZE(HDRP(bp));
 
     if (prev_alloc && next_alloc) {              // Case 1 : 이전 ,현재 블록이 모두 할당된 상태
+        heap_listp = bp;
         return bp;                              // // 할당이 해제되는 경우밖에 없으므로 이미 현재블록은 가용하므로 리턴
     } else if (prev_alloc && !next_alloc) {         // Case 2 : 이전 블록은 할당상태, 다음블록은 가용상태
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));  // 현재 블록에 다음블록 포함
@@ -147,6 +148,7 @@ static void *coalesce(void *bp) {
         //PUT(HDRP((bp)), PACK(size, 0));
         //PUT(FTRP(bp), PACK(size, 0));
     }
+    heap_listp = bp;
     return bp;
 }
 
@@ -196,9 +198,9 @@ static void *best_fit(size_t asize) {
     return best_fit;
 }
 
-static char *last_bp = NULL;
+//static char *last_bp = NULL;
 
-static void *next_fit(size_t asize) {
+/*static void *next_fit(size_t asize) {
     // last_bp가 NULL이면, 처음부터 탐색을 시작합니다.
     if (last_bp == NULL) {
         last_bp = heap_listp;
@@ -220,7 +222,7 @@ static void *next_fit(size_t asize) {
     } while (bp != last_bp);
 
     return NULL;
-}
+}*/
 /*
  * void bp*: bp 가용 블록의 주소
  * size_t asize: 가용블록에 할당하는 size
@@ -285,7 +287,7 @@ void *mm_malloc(size_t size) {
     }
 
     //first_fit으로 NULL이 아닌 메모리 공간을 찾으면 할당
-    if ((bp = next_fit(asize)) != NULL) {
+    if ((bp = find_fit(asize)) != NULL) {
         place(bp, asize);
         return bp;
     }
