@@ -97,6 +97,10 @@ int mm_init(void) {
     PUT(heap_listp + (3 * WSIZE), PACK(0, 1)); // epliogue header
     heap_listp += (2 * WSIZE); // 포인터를 Prologue Header 뒤로 이동
 
+    if (extend_heap(4) == NULL) {
+        return -1;
+    }
+
     // 두 가지 다른 경우에 호출된다.
     // (1) 힙이 초기화 될때 (2) mm_malloc이 적당한 맞춤fit을 찾지 못했을 때
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)  // extend_heap을 통해 시작할 때 힙을 한번 늘려줌
