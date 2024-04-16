@@ -113,7 +113,7 @@ int mm_init(void) {
     PUT(heap_listp + (5 * WSIZE), PACK(0, 1));         /* Epilogue header */
     heap_listp += (2 * WSIZE); // 포인터를 Prologue Header 뒤로 이동
     free_listp = heap_listp;
-    last_bp = heap_listp;
+//    last_bp = heap_listp;
 
     if (extend_heap(4) == NULL) {
         return -1;
@@ -171,41 +171,18 @@ static void *coalesce_with_LIFO(void *ptr) {
     size_t size = GET_SIZE(HDRP(ptr));
 
     if (prev_alloc && next_alloc) { /* Case 1: 앞뒤로 꽉~ 막혀있을 때 */
-        // 1.루트가 가리키고 있는 블럭A 찾기
-        ////1.1 만약 free-list 비어있을 때,
-        // 2.현재블록의 next는 블록A를 가리킴
-        // 3.블럭A의 prev는 현재블럭을 가리킴
-        // 4.루트는 현재블럭을 가리킴
         last_bp = ptr;
     } else if (prev_alloc && !next_alloc) { /* Case 2: 뒤는 막혀있고, 앞(다음)은 비어있을 때 */
-        // 00. 직전블럭의 next가, 현재블럭의 next를 가리킴 +(TBD)예외상황 처리해 주어야 할듯
-        // 00. 다음블럭의 previous가, 현재블럭이 가리키던 previous를 가리킴
-        // coalescing
         remove_in_freelist(NEXT_BLKP(ptr));
         size += GET_SIZE(HDRP(NEXT_BLKP(ptr)));
         PUT(HDRP(ptr), PACK(size, 0));
         PUT(FTRP(ptr), PACK(size, 0));
-        // 1. 루트가 가리키고 있는 블럭 A찾아줌
-        ////1.1 만약 free-list 비어있을 때,
-        // 2. 블럭A의 previous가 coalescing된 블럭을 가리킴
-        // 3. coalescing된 블럭의 next가 블럭A를 가리킴
-        // 4. coalescing된 블럭의 previous는 어떤 값도 가지지 않음, (0)
-        // 5. 루트가 coalescing된 블럭을 가리킴
     } else if (!prev_alloc && next_alloc) { /* Case 3: 뒤는 비어있고, 앞(다음)은 막혀있을 때 */
         remove_in_freelist(PREV_BLKP(ptr));
         size += GET_SIZE(HDRP(PREV_BLKP(ptr)));
         ptr = PREV_BLKP(ptr);
         PUT(HDRP(ptr), PACK(size, 0));
         PUT(FTRP(ptr), PACK(size, 0));
-
-        // 00. 직전블럭의 next가, 현재블럭의 next를 가리킴
-        // 00. 다음블럭의 previous가, 현재블럭이 가리키던 previous를 가리킴
-        //
-        // 1. 루트가 가리키고 있는 블럭 A찾아줌
-        // 2. 블럭A의 previous가 coalescing된 블럭을 가리킴
-        // 3. coalescing된 블럭의 next가 블럭A를 가리킴
-        // 4. coalescing된 블럭의 previous는 어떤 값도 가지지 않음, (0)
-        // 5. 루트가 coalescing된 블럭을 가리킴
     } else { /* Case 4: 앞뒤 모두 비어있을 때*/
         remove_in_freelist(PREV_BLKP(ptr));
         remove_in_freelist(NEXT_BLKP(ptr));
@@ -216,21 +193,8 @@ static void *coalesce_with_LIFO(void *ptr) {
         PUT(FTRP(NEXT_BLKP(ptr)), PACK(size, 0));
         ptr = PREV_BLKP(ptr);
 
-        // 00.현재블럭과 맞붙어있는 직전블럭
-        //// 00. 직전블럭의 next가, 현재블럭의 next를 가리킴
-        //// 00. 다음블럭의 previous가, 현재블럭이 가리키던 previous를 가리킴
-
-        // 00.현재블럭과 맞붙어있는 다음블럭
-        //// 00. 직전블럭의 next가, 현재블럭의 next를 가리킴
-        //// 00. 다음블럭의 previous가, 현재블럭이 가리키던 previous를 가리킴
-
-        // 1. 루트가 가리키고 있는 블럭 A찾아줌
-        // 2. 블럭A의 previous가 coalescing된 블럭을 가리킴
-        // 3. coalescing된 블럭의 next가 블럭A를 가리킴
-        // 4. coalescing된 블럭의 previous는 어떤 값도 가지지 않음, (0)
-        // 5. 루트가 coalescing된 블럭을 가리킴
     }
-    last_bp = ptr;
+//    last_bp = ptr;
     put_front_of_freelist(ptr);
     return ptr;
 }
@@ -242,82 +206,38 @@ static void *coalesce_with_LIFO(void *ptr) {
 
 static void *find_fit(size_t asize) //
 {
-    char *bp = last_bp;
-
-    for (bp = NEXT_BLKP(bp); GET_SIZE(HDRP(bp)) != 0; bp = NEXT_BLKP(bp)) {
-        if (GET_ALLOC(HDRP(bp)) == 0 && GET_SIZE(HDRP(bp)) >= asize) {
-            last_bp = bp;
-            return bp;
-        }
-    }
-
-    bp = heap_listp;
-    while (bp < last_bp) {
-        bp = NEXT_BLKP(bp);
-
-        if (GET_ALLOC(HDRP(bp)) == 0 && GET_SIZE(HDRP(bp)) >= asize) {
-            last_bp = bp;
+    for (void *bp = free_listp; GET_ALLOC(HDRP(bp)) != 1; bp = NEXT_FREEP(bp)) // TBD (next찾아다니면서 )프리 리스트로 바꾸기
+    {
+        if (asize <= GET_SIZE(HDRP(bp))) {
             return bp;
         }
     }
     return NULL;
-}
-
-
-/*static void *next_fit(size_t asize) {
-    // 적절한 가용 블록을 검색한다.
-    //first fit 검색을 수행한다. -> 리스트 처음부터 탐색하여 가용블록 찾기
-    // 무조건 사용만 가능하면되기에 탐색은 빠르지만, 최적의 메모리 사용은 아닐 확률이 있다.
-    // next fit, best fit,good fit은 별도 구현
-    void *bp;
-    //헤더의 사이즈가 0보다 크다. -> 에필로그까지 탐색한다.
-    if (recent_alloc == NULL) {
-        recent_alloc = heap_listp;
-    }
-
-
-    for (bp = recent_alloc; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
-            recent_alloc = bp;
-            return bp;
-        }
-    }
-
-    // 저장된 위치부터 보고 나서 할당할 곳을 못찾았다면, 처음부터 재탐색 한번 더함
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
-            recent_alloc = bp;
-            return bp;
-        }
-    }
-
-    return NULL;
-}*/
-
-/*static void *best_fit(size_t asize) {
-    void *best_fit = NULL; // 가장 잘 맞는 블록을 저장할 포인터
-    size_t smallest_diff = (size_t) - 1; // 가장 작은 크기 차이; 초기값은 최대값으로 설정
+    /*void *best_bp = NULL; // 최적의 블록 포인터 초기화
+    size_t min_diff = (size_t)-1; // 최소 크기 차이를 최대로 설정하여 초기화
 
     void *bp;
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        size_t csize = GET_SIZE(HDRP(bp));
+    // free_listp부터 시작하여 가용 블록 리스트를 순회
+    for (bp = free_listp; bp != NULL; bp = NEXT_BLKP(bp)) {
 
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= csize)) {
-            size_t diff = csize - asize; // 현재 블록과 요청 크기의 차이 계산
+        size_t csize = GET_SIZE(HDRP(bp)); // 현재 블록의 크기
+        // 현재 블록이 요청 사이즈보다 크거나 같고, 현재까지 찾은 최소 차이보다 작은 경우
+        if ((csize >= asize) && ((csize - asize) < min_diff)) {
+            printf("!!");
+            best_bp = bp; // 최적의 블록 업데이트
+            min_diff = csize - asize; // 최소 차이 업데이트
 
-            // 차이가 0이면, 완벽하게 맞는 블록을 찾은 것이므로 바로 반환
-            if (diff == 0) {
-                return bp;
-            } else if (diff < smallest_diff) { // 더 작은 차이를 가진 블록을 찾으면 업데이트
-                best_fit = bp;
-                smallest_diff = diff;
+            if (min_diff == 0) {
+                // 완벽하게 맞는 블록을 찾은 경우, 더 이상 탐색 중단
+                break;
             }
         }
+
     }
 
-    // 가장 잘 맞는 블록 반환 (없으면 NULL)
-    return best_fit;
-}*/
+    return best_bp;*/
+}
+
 
 /*
  * void bp*: bp 가용 블록의 주소
@@ -378,7 +298,7 @@ void *mm_malloc(size_t size) {
     //first_fit으로 NULL이 아닌 메모리 공간을 찾으면 할당
     if ((bp = find_fit(asize)) != NULL) {
         place(bp, asize);
-        last_bp = bp;
+//        last_bp = bp;
         return bp;
     }
 
