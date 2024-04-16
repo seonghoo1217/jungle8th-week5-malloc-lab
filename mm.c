@@ -224,14 +224,24 @@ void *coalesce(void *bp) {
 
 static void *find_fit(size_t asize) //
 {
-    /*for (void *bp = free_listp; GET_ALLOC(HDRP(bp)) != 1; bp = NEXT_FREEP(bp)) // TBD (next찾아다니면서 )프리 리스트로 바꾸기
-    {
-        if (asize <= GET_SIZE(HDRP(bp))) {
-            return bp;
+    int class;
+    void *bp;
+
+    // 적절한 크기의 클래스를 찾기 시작합니다. getclass 함수는 주어진 asize에 따라 적절한 클래스를 반환합니다.
+    for (class = getclass(asize); class < SEGLIMIT; class++) {
+        // 해당 클래스의 리스트를 순회합니다. START 매크로(또는 함수)는 주어진 클래스에 대한 리스트의 시작을 반환합니다.
+        for (bp = START(class); bp != NULL; bp = NEXT_FREE(bp)) {
+            // 현재 블록의 크기가 요청된 사이즈 이상인지 확인합니다.
+            if (GET_SIZE(HDRP(bp)) >= asize) {
+                // 적절한 블록을 찾았으면, 해당 블록의 주소를 반환합니다.
+                return bp;
+            }
         }
     }
-    return NULL;*/
-    int class;
+
+    // 적절한 블록을 찾지 못한 경우 NULL을 반환합니다.
+    return NULL;
+    /*int class;
     void *bp;
     void *best = NULL;
 
@@ -257,7 +267,7 @@ static void *find_fit(size_t asize) //
             break;
     }
 
-    return best;
+    return best;*/
 }
 
 
