@@ -1,6 +1,6 @@
 /*
  * mm-naive.c - The fastest, least memory-efficient malloc package.
- * 
+ *
  * In this naive approach, a block is allocated by simply incrementing
  * the brk pointer.  A block is pure payload. There are no headers or
  * footers.  Blocks are never coalesced or reused. Realloc is
@@ -284,19 +284,19 @@ static void place(void *bp, size_t asize) {
     removefreeblock(bp);
 
     if (diff_size >= (2 * DSIZE)) {
-        printf("block 위치 %p | 들어갈 list의 크기 %d | 넣어야 할 size 크기 %d\n", (int *) bp, GET_SIZE(HDRP(bp)), asize);
+        // printf("block 위치 %p | 들어갈 list의 크기 %d | 넣어야 할 size 크기 %d\n", (int *) bp, GET_SIZE(HDRP(bp)), asize);
 
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
         bp = NEXT_BLKP(bp); // 다음 블록(분할한)으로 포인터 이동
 
-        printf("free block 위치 %p | 나머지 block 크기 %d\n", (int *) NEXT_BLKP(bp), diff_size);
+        //printf("free block 위치 %p | 나머지 block 크기 %d\n", (int *) NEXT_BLKP(bp), diff_size);
         PUT(HDRP(bp), PACK(csize - asize, 0));// 새로 분할된 블록의 헤더,푸터를 남은 크기와 미할당 상태로 설정
         PUT(FTRP(bp), PACK(csize - asize, 0));
         addfreeblock(bp);
         return;
     }
-    printf("block 위치 %p | padding으로 넣은 size 크기 %d\n", (unsigned int *) bp, csize);
+    //printf("block 위치 %p | padding으로 넣은 size 크기 %d\n", (unsigned int *) bp, csize);
     PUT(HDRP(bp), PACK(csize, 1));
     PUT(FTRP(bp), PACK(csize, 1));
 }
@@ -369,23 +369,33 @@ void mm_free(void *ptr) {
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
 void *mm_realloc(void *ptr, size_t size) {
-    if (ptr == NULL)  // pointer가 비어 있으면 malloc 함수와 동일하게 동작
-        return mm_malloc(size);
+    void *newptr;
 
-    if (size <= 0) {  // memory size가 0이면 메모리 free
-        mm_free(ptr);
+    size_t originsize = GET_SIZE(HDRP(ptr)); // 원본 사이즈
+    if (size == 0) {
+        free(ptr);
         return NULL;
     }
+    if (ptr == NULL) {
+        return malloc(size);
+    }
 
-    void *newp = mm_malloc(size);
-    size_t copySize = GET_SIZE(HDRP(ptr));
-
-    if (size < copySize)  // 할당한 size가 기존의 copysize보다 작으면 size 만큼만 copy
-        copySize = size;
-
-    memcpy(newp, ptr, copySize);
-    mm_free(ptr); // 원래 기존 주소에 있던 데이터를 free 시킨다.
-    return newp;
+    if (!GET_ALLOC(HDRP(NEXT_BLKP(ptr)))) { // 가용 블록이고 사이즈 충분
+        size_t nextBlockSize = GET_SIZE(HDRP(NEXT_BLKP(ptr)));
+        if ((originsize + nextBlockSize) >= size) {
+            removefreeblock(NEXT_BLKP(ptr)); // 가용 블록 리스트에서 후속 블록 제거
+            size_t newSize = originsize + nextBlockSize;
+            PUT(HDRP(ptr), PACK(newSize, 1)); // 새로운 헤더
+            PUT(FTRP(ptr), PACK(newSize, 1)); // 수정된 새로운 푸터
+            return ptr;
+        }
+    }
+    newptr = malloc(size);
+    if (newptr == NULL) return NULL;
+    if (size < originsize) originsize = size;
+    memcpy(newptr, ptr, originsize);
+    free(ptr);
+    return newptr;
 }
 
 int getclass(size_t size) {
