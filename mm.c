@@ -369,32 +369,24 @@ void mm_free(void *ptr) {
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
 void *mm_realloc(void *ptr, size_t size) {
-    void *newptr;
-
-    size_t originsize = GET_SIZE(HDRP(ptr)); // 원본 사이즈
-    if (size == 0) {
-        free(ptr);
-        return NULL;
-    }
-    if (ptr == NULL) {
-        return malloc(size);
+    if (ptr == NULL) // 포인터가 NULL인 경우 할당만 수행
+        return mm_malloc(size);
+    if (size <= 0) // size가 0인 경우 메모리 반환만 수행
+    {
+        mm_free(ptr);
+        return 0;
     }
 
-    if (!GET_ALLOC(HDRP(NEXT_BLKP(ptr)))) { // 가용 블록이고 사이즈 충분
-        size_t nextBlockSize = GET_SIZE(HDRP(NEXT_BLKP(ptr)));
-        if ((originsize + nextBlockSize) >= size) {
-            removefreeblock(NEXT_BLKP(ptr)); // 가용 블록 리스트에서 후속 블록 제거
-            size_t newSize = originsize + nextBlockSize;
-            PUT(HDRP(ptr), PACK(newSize, 1)); // 새로운 헤더
-            PUT(FTRP(ptr), PACK(newSize, 1)); // 수정된 새로운 푸터
-            return ptr;
-        }
-    }
-    newptr = malloc(size);
-    if (newptr == NULL) return NULL;
-    if (size < originsize) originsize = size;
-    memcpy(newptr, ptr, originsize);
-    free(ptr);
+    void *newptr = mm_malloc(size); // 새로 할당한 블록의 포인터
+    if (newptr == NULL)
+        return NULL; // 할당 실패
+
+    size_t copySize = GET_SIZE(HDRP(ptr)) - DSIZE; // payload만큼 복사
+    if (size < copySize)                           // 기존 사이즈가 새 크기보다 더 크면
+        copySize = size;                           // size로 크기 변경 (기존 메모리 블록보다 작은 크기에 할당하면, 일부 데이터만 복사)
+
+    memcpy(newptr, ptr, copySize); // 새 블록으로 데이터 복사
+    mm_free(ptr);                  // 기존 블록 해제
     return newptr;
 }
 
